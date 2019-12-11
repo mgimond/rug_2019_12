@@ -1,0 +1,600 @@
+---
+title: "`base` vs `tidyverse` vs `data.table` "
+author: "Colby RUG 2019.12.11"
+date: " Manny Gimond"
+output: 
+  html_document:
+    toc: true
+    css: Tutorial.css
+    highlight: haddock
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, comment = NA)
+```
+
+This write-up highlights differences between the `base`, `tidyverse` and `data.table` ecosystems as it pertains to data manipulation. 
+
+The `tidyverse` is itself a package that includes eight core packages however, for the purpose of this tutorial, emphasis will be placed on two of its core packages, `dplyr` and `tidyr`, which are used for most data manipulation operations. The `tidyverse` has its own website, https://www.tidyverse.org/, and it is mostly maintained by [RStudio](https://rstudio.com/) staff.
+
+The `data.table` has its own website too, https://rdatatable.gitlab.io/data.table/. It was originally developed by Matt Dowle in 2008 and is now maintained by him and a large community of contributors. `data.table` is also available for Python as (pydatatable)[https://github.com/h2oai/datatable]
+
+> Before continuing, make sure to attach the following packages.
+
+```{r}
+# Load the two core tidyverse packages
+library(dplyr)  
+library(tidyr) 
+
+# Load the data.table package
+library(data.table)
+```
+
+## Pros and cons
+
+
+```{r echo=FALSE}
+library(kableExtra)
+smry <- data.frame( `Environment`     = c( "Pros", "Cons"),
+                  `base`      = c( "<li>stable
+                                   <li>available in most R installations", 
+                                   "<li>slow
+                                    <li>syntax can be clunky" ),
+                  `tidyverse` = c( "<li>uses verbs to describe functions
+                                   <li>usually faster than base
+                                   <li>abundant online resources"  , 
+                                   "<li>verbose syntax, 
+                                   can make for lengthy scripts
+                                   <li> its reliance on functional programming 
+                                   may not be entirely intuitive for beginners
+                                   <li>lots of dependencies
+                                   <li>slower than data.table, but when 
+                                   paired with `dtplyr`, 
+                                   can match data.table speed" ),
+                  `data.table`  = c("<li>concise syntax
+                                    <li>very fast
+                                    <li>memory efficient
+                                    <li>no dependencies (other than base R)", 
+                                    "<li>concise syntax can be difficult to 
+                                    decipher on long chains of code" ))
+
+
+#knitr::kable(df, format = "html",escape = FALSE) 
+ kable(smry, format = "html",escape = FALSE) %>%
+   kable_styling("striped", full_width = F) %>% 
+   row_spec(1, background = "#E9F5E9") %>% 
+   row_spec(2, background = "#FAE8E8") 
+```
+
+
+## Summary of key functions
+
+
+```{r echo=FALSE}
+library(kableExtra)
+cmp <- data.frame( `Environment` = c("Supported data class(es)",
+                                    "Reading data", 
+                                    "Subset by column",
+                                    "Subset by rows",
+                                    "Create new column",
+                                    "Delete a column",
+                                    "Summarize",
+                                    "Grouping",
+                                    "Pivot to long",
+                                    "Pivot to wide",
+                                    "Joining tables"),
+                  `base`      = c( "`data.frame`",
+                                   "`read.csv`", 
+                                   "`[ , ...]`",
+                                   "`[... , ]`",
+                                   "`df$y = ...`",
+                                   "`df$y = NULL`",
+                                   "`apply(df[ , y], 2, ...)`",
+                                   "`aggregate()`",
+                                   "`reshape()`",
+                                   "`reshape()`",
+                                   "`merge()`"),
+                  `tidyverse` = c( "`data.frame`, `tibble`",
+                                   "`read_csv`",
+                                   "`select()`",
+                                   "`filter()`",
+                                   "`mutate(tb, y = ...)`",
+                                   "`select(tb, -y)`",
+                                   "`summarise()`",
+                                   "`group_by()`",
+                                   "`pivot_longer()`",
+                                   "`pivot_wider()`",
+                                   "`left_join()`"),
+                  `data.table`  = c("`data.table`",
+                                    "`fread`",
+                                    "`[ ,... , ]`",
+                                    "`[... , , ]`",
+                                    "`[ , y := ..., ]`",
+                                    "`[ , y := NULL, ]`",
+                                    "`[ , ...(y), ]`",
+                                    "`[ , , by = ...]`",
+                                    "`melt()`",
+                                    "`dcast()`",
+                                    "`DT1[ DT2, on = ...]`"))
+
+
+
+ kable(cmp, format = "html",escape = FALSE) %>%
+   kable_styling("striped", full_width = F, position = "left") 
+```
+
+## Data prep
+
+Both `base` functions and `tidyverse` functions will accept a `data.frame` as input. `tidyverse` functions will also accept the `tidyverse`'s native `tibble` format. In the following exercises, a `tibble` will be passed to all `tidyverse` functions if only to distinguish a tidyverse operation from a `base` or `data.table` operation.
+
+A `data.table`, however, requires that the input table be in a native `data.table` format. But a `data.table` can be used as input into both `base` and `tidyverse` functions. In the examples that follow,  `data.table` tables will be limited to `data.table` operations to distinguish such operations from those in `base` and `tidyverse.`
+
+
+
+<div class="c1">
+```{r}
+# Create  dataframe
+df <- mtcars[, c(1:2, 4, 9)]  
+df$car <- rownames(mtcars)    
+rownames(df) <- NULL         
+
+# Create a tibble
+tb <- as_tibble(df)
+
+# Create a data.table
+dt <- as.data.table(df)
+```
+
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+
+## The `data.table` ecosystem
+
+The `data.table` environment benefits from its concise syntax; this eliminates the need to memorize an arsenal of function names. In fact, most data manipulating operations are performed between brackets `[]`. However unlike the `base` and `tidyverse` environments, the data must be in a `data.table` format. This can be accomplished by loading the the data file using the `data.table`'s `fread()` function, or by converting the data frame to a `data.table` via the `as.data.table()` function.
+
+The bracket structure differs from that of the base dataframe bracket in that the `data.table` bracket takes three indices as opposed to two.
+
+```{r eval=FALSE}
+dt[i, j, by]
+```
+
+The indices are referenced as follows:
+
+* `i`: which rows and what (if anything) to do with these rows.
+* `j`: which columns and what (if anything) to do with these columns.
+* `by`: how to group records if `j` is being summarized.
+
+From there, you can *chain* other operations.
+
+```{r eval=FALSE}
+dt[i, j, by][..][..]...
+```
+
+Of interest to some, the `j` index can take on many base R functions including `plot()`.
+
+```{r eval=FALSE}
+dt[ , plot(y,x), ]
+```
+ 
+ 
+For more information on the bracket environments, type:
+
+``?`[.data.table` ``: To access the help page for `data.table`'s `[]` environment.  
+``?`[.data.frame` ``: To access the help page for `base`'s `[]` environment.
+
+## A comparison of the functions
+
+<div class="c1">
+<span class="base">
+base R operations
+</span><br><span class="tidy">
+tidyverse operations
+</span><br><span class="dtbl">
+data.table operations
+</span>
+</div><div class = "c2">
+</div>
+
+### Selecting column(s)
+
+<div class="c1">
+<span class="base">
+df[ , c("mpg", "hp")]
+</span><br><span class="tidy">
+select(tb, mpg, hp)
+</span><br><span class="dtbl">
+dt[ , .(mpg, hp)]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df[ , c("mpg", "hp")]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+ 
+  
+*NOTE: in base R, if you extract a single column, the output will be a vector. To force the output to a dataframe, add `drop = FALSE` as in `df[ , "hp", drop = FALSE]`*
+
+### Subsetting by row number
+
+<div class="c1">
+<span class="base">
+df[1:3 , ]
+</span><br><span class="tidy">
+slice(tb, 1:3)
+</span><br><span class="dtbl">
+dt[1:3, , ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df[1:3 , ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+
+
+### Subsetting by variable values
+
+<div class="c1">
+<span class="base">
+df[ df$mpg > 20, ]
+</span><br><span class="tidy">
+filter(tb, mpg > 20 )
+</span><br><span class="dtbl">
+dt[ mpg > 20 ,  ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df[ df$mpg > 20, ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+
+### Sorting a table (in ascending order)
+
+<div class="c1">
+<span class="base">
+df[order(df$mpg) , ]
+</span><br><span class="tidy">
+arrange(tb, mpg)
+</span><br><span class="dtbl">
+dt[order(mpg) , ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df[order(df$mpg) , ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+### Sorting a table (in descending order)
+
+<div class="c1">
+<span class="base">
+df[order(-df$mpg) , ]
+</span><br><span class="tidy">
+arrange(tb, -mpg)
+</span><br><span class="dtbl">
+dt[order(-mpg) , ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df[order(-df$mpg) , ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+
+### Sorting by multiple columns
+
+<div class="c1">
+<span class="base">
+df[order(df\$cyl, df\$mpg) , ]
+</span><br><span class="tidy">
+arrange(tb, cyl, mpg)
+</span><br><span class="dtbl">
+dt[order(cyl, mpg) , ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df[order(df$cyl, df$mpg) , ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+### Creating a new column
+
+<div class="c1">
+<span class="base">
+df\$gpm <- 1 / df\$mpg
+</span><br><span class="tidy">
+tb <- mutate(tb, gpm = 1 / mpg)
+</span><br><span class="dtbl">
+dt[ , gpm := 1 / mpg, ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+df$gpm <- 1/df$mpg
+out <- df
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+### Deleting a column
+
+<div class="c1">
+<span class="base">
+df$gpm <- NULL
+</span><br><span class="tidy">
+tb <- select(tb, -gpm)
+</span><br><span class="dtbl">
+dt[ , gpm := NULL, ]
+</span>
+</div><div class = "c2">
+```{r echo=FALSE}
+df$gpm <- NULL
+out <- df
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+
+
+
+### Summarizing specific columns
+
+<div class="c1">
+<span class="base">
+apply(df[ , c("mpg","hp")], 2, median)
+</span><br><pre class="tidy">
+summarise(tb, mpg = median(mpg), 
+              hp = median(hp))
+</pre><br><pre class="dtbl">
+dt[ , .(mpg = median(mpg), 
+        hp = mean(hp)) , ]
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- summarise(tb, mpg = median(mpg), hp = median(hp))
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+ 
+*NOTE: The `base` method returns a vector while the  `tidyverse` and `data.table` methods return a table.*
+
+### Summarizing all columns
+
+<div class="c1">
+<span class="base">
+apply(df, 2, max)
+</span><br><pre class="tidy">
+summarise_each(tb, max)
+</pre><br><pre class="dtbl">
+dt[ , lapply(.SD,  max) , ]
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- dt[ , lapply(.SD,  max) , ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+* NOTE: The apply function returns a vector. As such, the data type will inheret the  [highest common mode](https://mgimond.github.io/ES218/Week02a.html#(atomic)_vectors) (character in this example).
+
+### Summarizing all columns by group
+
+<div class="c1">
+<span class="base">
+aggregate(df, list(df$cyl), max)
+</span><br><pre class="tidy">
+group_by(tb, cyl) %>% summarise_each(max)
+</pre><br><pre class="dtbl">
+dt[ , lapply(.SD,  max), by = cyl ] 
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- dt[ , lapply(.SD,  max), by = cyl ] 
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+
+
+### Pivoting table to long format
+
+<div class="c1">
+<pre class="base">
+df.l <- reshape(df, idvar = "car", 
+   times = names(df)[names(df) != "car"],
+   timevar = "variable", v.names="value",
+   varying = list(names(df)
+                  [names(df) != "car"]),
+   direction = "long")
+</pre><br><pre class="tidy">
+tb.l <- pivot_longer(tb, 
+                 names_to = "variable", 
+                 values_to = "value", 
+                 -car)
+</pre><br><pre class="dtbl">
+dt.l <- melt(dt, id.vars = c("car"), 
+             variable.name = "variable", 
+             value.name = "value")
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+df.l <- reshape(df, idvar = "car", 
+                times = names(df), timevar = "variable",
+                varying = list(names(df)), direction = "long")
+tb.l <- pivot_longer(tb, 
+                     names_to = "variable", 
+                     values_to = "value", -car)
+dt.l <- melt(dt, id.vars = c("car"), 
+     variable.name = "variable", 
+     value.name = "value")
+out <- tb.l
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+ 
+*NOTE 1: The output order will differ between these methods.*  
+*NOTE 2: The `base` reshape function creates row names from the `car` variable. We'll remove the row names to match the other table's structure.*
+
+```{r}
+df.l$car <- row.names(df.l)
+row.names(df.l) <- NULL
+```
+
+### Pivoting table to wide format
+
+<div class="c1">
+<pre class="base">
+df.w <- reshape(df.l, 
+             idvar = "car",
+             timevar="variable", 
+             v.names="value",  
+             direction = "wide")
+</pre><br><pre class="tidy">
+tb.w <- pivot_wider(tb.l, 
+             names_from = variable, 
+             values_from = value)
+</pre><br><pre class="dtbl">
+dt.w <- dcast(dt.l, car ~ variable, 
+              value.var="value")
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+tb.w <- pivot_wider(tb.l, 
+             names_from = variable, 
+             values_from = value)
+out <- tb.w
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+### Joining tables
+
+We'll first create a lookup table that pairs up the `am` variable values with a text descriptor.
+
+
+<div class="c1">
+```{r}
+df.lu <- data.frame(x = c(0,1), 
+                    y = c("automatic",
+                          "manual"))
+tb.lu <- as_tibble(df.lu)
+dt.lu <- as.data.table(df.lu)
+```
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- df.lu
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+Next, we join the tables.
+
+<div class="c1">
+<pre class="base">
+merge(df, df.lu, by.x = "am", 
+          by.y="x", all.x = TRUE)
+</pre><br><pre class="tidy">
+left_join(tb, tb.lu, 
+          by = c("am" = "x"))
+</pre><br><pre class="dtbl">
+dt[dt.lu, on = c("am" = "x")]
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+out <- merge(df, df.lu, by.x = "am", by.y="x", all.x = TRUE)
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+ 
+### Chaining commands
+
+Base R does not have native chaining structure like the `tidyverse` or `data.table.` Instead, it relies on a series of standalone operations. However, one technique that can be adopted to make it *seem* as though a series of operations are to be run in unison is to pass each intermediate steps to the `.` object as in ` . <- mean(x)`.
+
+The `tidyverse` adopts `margeritr`'s pipe, `%>%`, to piece operations together. 
+
+The `data.table` pieces bracketed operations back to back as in `[...][...]...`. Note that if you are to split data.table operations across multiple lines, you must split the line in the middle of an open bracket as in:
+```
+[ ,do something>][
+ do another thing][
+   and so on]
+```
+
+In this example, we'll first create a new variable, `gpm`, then we'll  compute the median `gpm` value grouped by `cyl`  before sorting the summary in descending order.
+
+<div class="c1">
+<pre class="base">
+df$gpm <- 1/df$mpg
+. <- df[ , c("cyl", "gpm")]
+. <- aggregate(., list(df$cyl), median)
+.$Group.1 <- NULL
+.[order(-.$gpm), ]
+</pre><br><pre class="tidy">
+tb %>% 
+  mutate(gpm = 1/mpg) %>% 
+  group_by(cyl) %>% 
+  summarise(gpm = median(gpm)) %>% 
+  arrange(-gpm)
+</pre><br><pre class="dtbl">
+dt[ , gpm := 1/mpg, ][ 
+   order(-gpm), .(gpm = median(gpm)), 
+   by = cyl]
+</pre>
+</div><div class = "c2">
+```{r echo=FALSE}
+df$gpm <- 1/df$mpg
+. <- df[ , c("cyl", "gpm")]
+. <- aggregate(., list(df$cyl), median)
+.$Group.1 <- NULL
+out <- .[order(-.$gpm), ]
+ kable(out, format = "html",escape = FALSE,padding=0) %>%
+   kable_styling("striped", full_width = F, position = "left",font_size = 10) %>% 
+   scroll_box(height = "130px")
+```
+</div>
+
+
+-----
+
+![Copyleft](http://i.creativecommons.org/l/by-sa/4.0/88x31.png) Manuel Gimond, 2019
